@@ -1,0 +1,3 @@
+[submodule "lib/Simple-Schedule"]
+	path = lib/Simple-Schedule
+	url = https://github.com/ChSt98/Simple-Schedule.git
