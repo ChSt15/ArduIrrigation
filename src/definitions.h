@@ -24,8 +24,6 @@
 #define POWERSAVING_DISABLE_THRESHOLD 3.6f
 #define POWERSHUTDOWN_THRESHOLD 3.3f
 
-#define RTC_UPDATE_INTERVAL 1000*60
-
 
 //Max number of watering per day
 #define MAX_VALVE_TIMING 20
@@ -68,7 +66,7 @@
 
 //VBat Input
 #define ADCINPUTVBATPIN 34
-#define ADCINPUTVBATFACTOR 2.0f*3.3f/4096.0f
+#define ADCINPUTVBATFACTOR 2.0f*3.3f
 
 //Touch Input
 #define TOUCHINPUTPIN1 14
