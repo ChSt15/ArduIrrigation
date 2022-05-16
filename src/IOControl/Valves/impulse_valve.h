@@ -40,7 +40,7 @@ public:
      * @param pulseTime_ns How long to pulse for state change.
      * 
      */
-    Valve_Impulse(GPIO_HAL_Abstract& outA, GPIO_HAL_Abstract& outB, int64_t pulseTime_ns = 200*MILLISECONDS);
+    Valve_Impulse(GPIO_HAL_Abstract& outA, GPIO_HAL_Abstract& outB, int64_t pulseTime_ns = 500*MILLISECONDS);
 
     bool isOpen() override;
 
