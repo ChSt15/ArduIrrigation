@@ -4,23 +4,27 @@
 #include "EEPROM.h"
 #include "KraftKontrol/modules/datalink_modules/sx1280_lora_driver.h"
 
-#include "IOControl/IOExpander/ioexpander.h"
+#include "ArduIrrigationBase/IOControl/IOExpander/ioexpander.h"
 
-#include "IOControl/Valves/impulse_valve.h"
+#include "ArduIrrigationBase/IOControl/Valves/impulse_valve.h"
 
-#include "IOControl/SoilMoisture/soil_moisture.h"
+#include "ArduIrrigationBase/IOControl/SoilMoisture/soil_moisture.h"
 
-#include "Timing/rtc_ds3231.h"
+#include "ArduIrrigationBase/Timing/rtc_ds3231.h"
 
-#include "Timing/watering_timedate.h"
-#include "Timing/watering_cycle.h"
+#include "ArduIrrigationBase/Timing/watering_dailytime.h"
+#include "ArduIrrigationBase/Timing/watering_cycle.h"
 
-#include "comms/Physical/physical_link_topic.h"
-#include "comms/Datalink/datalink.h"
+#include "ArduIrrigationBase/comms/Physical/physical_link_topic.h"
+#include "ArduIrrigationBase/comms/Datalink/datalink.h"
+#include "ArduIrrigationBase/comms/Network/network_port.h"
 
 #include "definitions.h"
 
 #include "SSD1306Wire.h"
+
+
+#define MANUAL_WATERING_LENGTH 5*MINUTES
 
 
 SX1280Driver loraDriver(RFBUSY, TXEN, RXEN, DIO1, NRESET, NSS, 10);
@@ -34,16 +38,16 @@ Valve_Impulse valve3(ioExpander.getGPIOPinRef(Valve3BPin), ioExpander.getGPIOPin
 
 //WateringEvent event1(valve, 23, 27, 10*SECONDS);
 
-//Watering_Cycle cycle1(valve1, 2*HOURS, 30*SECONDS, 4*HOURS, 19*HOURS+5*MINUTES);
+Watering_Cycle cycle1(valve1, 2*HOURS, 45*SECONDS, 4*HOURS, 20*HOURS);
 
-Watering_Cycle cycle11(valve1, 1*HOURS, 3*MINUTES, 12*HOURS, 23*HOURS);
+/*Watering_Cycle cycle11(valve1, 1*HOURS, 3*MINUTES, 12*HOURS, 23*HOURS);
 Watering_Cycle cycle12(valve1, 1*HOURS, 3*MINUTES, 1*HOURS, 8*HOURS);
 
 Watering_Cycle cycle21(valve2, 1*HOURS, 2*MINUTES, 12*HOURS + 4*MINUTES, 23*HOURS);
 Watering_Cycle cycle22(valve2, 1*HOURS, 2*MINUTES, 1*HOURS + 4*MINUTES, 8*HOURS);
 
 Watering_Cycle cycle31(valve3, 1*HOURS, 3*MINUTES, 12*HOURS + 8*MINUTES, 23*HOURS);
-Watering_Cycle cycle32(valve3, 1*HOURS, 3*MINUTES, 1*HOURS + 8*MINUTES, 8*HOURS);
+Watering_Cycle cycle32(valve3, 1*HOURS, 3*MINUTES, 1*HOURS + 8*MINUTES, 8*HOURS);*/
 //Watering_Cycle cycle11(valve1, 1*HOURS, 3*MINUTES, 12*HOURS, 8*HOURS);
 //Watering_Cycle cycle2(valve2, 1*HOURS, 3*MINUTES, 12*HOURS+2*MINUTES, 8*HOURS);
 //Watering_Cycle cycle3(valve3, 1*HOURS, 3*MINUTES, 12*HOURS+4*MINUTES, 8*HOURS);
@@ -133,18 +137,18 @@ private:
     float avg2 = 0;
     float avg3 = 0;
 
-    float thres = 10;
-
-    int64_t valveOpenStart = 0;
-    bool valveState = 0;
+    float thres = 15;
 
     Buffer<float, 3> touchBuffer1;
     Buffer<float, 3> touchBuffer2;
     Buffer<float, 3> touchBuffer3;
 
+    bool b2Pressed = false;
+    bool b3Pressed = false;
+
 public:
 
-    Display(): Task_Threading("Display Control", eTaskPriority_t::eTaskPriority_High, 500*MILLISECONDS) {}
+    Display(): Task_Threading("Display Control", eTaskPriority_t::eTaskPriority_High, 500*MILLISECONDS, 0, true) {}
 
 
     void init() {
@@ -195,42 +199,45 @@ public:
 
         //Serial.println(String() + "Touch: " + touch + ", avg: " + avg);
 
-        if (valveState && NOW() - valveOpenStart > 10*MINUTES) {
-            valveState = false;
-            if (valve1.isOpen()) valve1.open(false);
-            if (valve2.isOpen()) valve2.open(false);
-            if (valve3.isOpen()) valve3.open(false);
-        }
-
         if (touch1 < avg1-thres || NOW() < 5*SECONDS) {
 
             if (touch2 < avg2-thres) {
 
-                avg2 = avg2*0.995 + float(touch2)*0.005;
+                avg2 = avg2*0.998 + float(touch2)*0.002;
 
-                if (!valve1.isOpen()) valve1.open(true);
-                if (!valve2.isOpen()) valve2.open(true);
-                if (!valve3.isOpen()) valve3.open(true);
+                if (!b2Pressed) {
 
-                valveOpenStart = NOW();
-                valveState = true;
+                    WateringScheduler::addWateringTime(MANUAL_WATERING_LENGTH, valve1);
+                    WateringScheduler::addWateringTime(MANUAL_WATERING_LENGTH, valve2);
+                    WateringScheduler::addWateringTime(MANUAL_WATERING_LENGTH, valve3);
 
+                }
+
+                b2Pressed = true;
+
+            } else {
+                b2Pressed = false;
             }
 
             if (touch3 < avg3-thres) {
 
-                avg3 = avg3*0.995 + float(touch3)*0.005;
+                avg3 = avg3*0.998 + float(touch3)*0.002;
 
-                if (valve1.isOpen()) valve1.open(false);
-                if (valve2.isOpen()) valve2.open(false);
-                if (valve3.isOpen()) valve3.open(false);
+                if (!b3Pressed) {
 
-                valveOpenStart = 0;
-                valveState = false;
+                    WateringScheduler::addWateringTime(5*SECONDS, valve1);
+                    WateringScheduler::addWateringTime(5*SECONDS, valve2);
+                    WateringScheduler::addWateringTime(5*SECONDS, valve3);
 
+                }
+
+                b3Pressed = true;
+
+            } else {
+                b3Pressed = false;
             }
 
-            avg1 = avg1*0.995 + float(touch1)*0.005;
+            avg1 = avg1*0.998 + float(touch1)*0.002;
 
             float bat = vBatMonitor.getBatteryVoltage();
             float batPercent = vBatMonitor.getBatteryPercent();
@@ -249,6 +256,8 @@ public:
                 display_.displayOn();
             }
             
+
+            TimeSpan runningSince = NOW();
             
             display_.clear();
 
@@ -257,6 +266,7 @@ public:
             display_.drawString(64, 30, String("Zeit: ") + time.hour() + ":" + time.minute() + ":" + time.second());
             display_.drawString(64, 40, String("Nächste: ") + next.hour() + ":" + next.minute() + ":" + next.second() + " in " + String((double)(next - time).nanosecondsTime()/SECONDS, 0) + "s");
             display_.drawString(64, 50, String("Ventile: 1:") + (valve1.isOpen()?"Auf":"Zu") + " 2:" + (valve2.isOpen()?"Auf":"Zu") + " 3:" + (valve3.isOpen()?"Auf":"Zu"));
+            display_.drawString(64, 60, String("Seit: ") + runningSince.month() + ":" + runningSince.day() + " " + runningSince.hour() + ":" + runningSince.minute() + ":" + runningSince.second());
 
 
             display_.display();
@@ -266,6 +276,9 @@ public:
             avg1 = avg1*0.9 + touch1*0.1;
             avg2 = avg2*0.9 + touch2*0.1;
             avg3 = avg3*0.9 + touch3*0.1;
+
+            b2Pressed = false;
+            b3Pressed = false;
 
             
             if (displayOn) {
@@ -291,7 +304,7 @@ public:
 
         //printThreads();
 
-        if (NOW() > 5*MINUTES) esp_restart();
+        //if (NOW() > 5*MINUTES) esp_restart();
 
     }
 
@@ -310,52 +323,58 @@ public:
     }
 
 
-} testingClass;
+};// testingClass;
 
 
 
-/*Topic<DataFrame> topicLinkTest;
+Topic<DataFrame> topicLinkTest;
 
 PhysicalLink_Topic physicalLinkTest1(topicLinkTest);
 DataLink dataLink1(physicalLinkTest1);
+NetworkPort networkPort1;
 
 PhysicalLink_Topic physicalLinkTest2(topicLinkTest);
 DataLink dataLink2(physicalLinkTest2);
+NetworkPort networkPort2;
 
 
 class LinkTestSend: public Task_Threading {
 public:
 
-    LinkTestSend(): Task_Threading("Link Test Send", eTaskPriority_t::eTaskPriority_Realtime, 1*SECONDS) {}
+    LinkTestSend(): Task_Threading("Link Test Send", eTaskPriority_t::eTaskPriority_Realtime, 1*SECONDS) {
+        networkPort1.useDatalink(dataLink1);
+        networkPort1.setAddress(1);
+    }
 
     void thread() override {
 
         uint8_t array[5];
+        NetworkPacket packet;
+        packet.destinationAddress = 3;
 
         array[0] = 1;
         array[1] = 2;
         array[2] = 3;
         array[3] = 6;
         array[4] = 60;
-        DataFrame frame(array, 5);
-
-        dataLink1.getSendDataTopic().publish(frame);
+        packet.dataFrame = DataFrame(array, 5);
+        networkPort1.getNetworkPortTopic().publish(packet);
 
         array[0] = 1;
         array[1] = 8;
         array[2] = 4;
         array[3] = 6;
         array[4] = 60;
-        frame = DataFrame(array, 5);
-        dataLink1.getSendDataTopic().publish(frame);
+        packet.dataFrame = DataFrame(array, 5);
+        networkPort1.getNetworkPortTopic().publish(packet);
 
         array[0] = 1;
         array[1] = 9;
         array[2] = 1;
         array[3] = 6;
         array[4] = 60;
-        frame = DataFrame(array, 5);
-        dataLink1.getSendDataTopic().publish(frame);
+        packet.dataFrame = DataFrame(array, 5);
+        networkPort1.getNetworkPortTopic().publish(packet);
 
         Serial.println("Sending time!");
 
@@ -367,13 +386,16 @@ public:
 class LinkTestReceive: public Task_Threading {
 public:
 
-    LinkTestReceive(): Task_Threading("Link Test Receive", eTaskPriority_t::eTaskPriority_Realtime, 100*MILLISECONDS) {}
+    LinkTestReceive(): Task_Threading("Link Test Receive", eTaskPriority_t::eTaskPriority_Realtime, 100*MILLISECONDS) {
+        networkPort2.useDatalink(dataLink2);
+        networkPort2.setAddress(2);
+    }
 
-    Buffer_Subscriber<DataFrame, 10> subr_;
+    Buffer_Subscriber<NetworkPacket, 10> subr_;
 
     void init() override {
 
-        subr_.subscribe(dataLink2.getReceivedDataTopic());
+        subr_.subscribe(networkPort2.getNetworkPortTopic());
 
     }
 
@@ -382,7 +404,9 @@ public:
         while (subr_.available()) {
 
             DataFrame frame;
-            subr_.takeBack(frame);
+            NetworkPacket packet;
+            subr_.takeBack(packet);
+            frame = packet.dataFrame;
 
             uint8_t array[5];
             frame.copyContentsToArray(array, 5);
@@ -394,7 +418,7 @@ public:
     }
 
 
-} linkTestReceive;*/
+} linkTestReceive;
 
 
 void sleepForTime(int64_t sleepTime_ns) {
@@ -422,7 +446,7 @@ void setup() {
     //rtcClock.setTime(TimeDate(__DATE__, __TIME__).unixtime()*SECONDS);
     rtcClock.init();
 
-    //SystemTime::setTime(TimeDate(2022, 4, 20, 2, 7, 40));
+    //SystemTime::setTime(TimeDate(2022, 4, 16, 12, 59, 40));
 
     Task_Threading::setSleepFunction(sleepForTime);
 
@@ -431,6 +455,8 @@ void setup() {
     loraDriver.setLoRaParams(2445000000UL, LORA_SF12, LORA_BW_0200, LORA_CR_4_8, false);
     loraDriver.stopReceiving();
     //loraDriver.startReceiving();
+
+    Valve_Abstract::forceAllValvesShut(true);
 
 }
 
