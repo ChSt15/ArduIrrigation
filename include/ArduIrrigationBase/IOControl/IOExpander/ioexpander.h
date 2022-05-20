@@ -6,7 +6,7 @@
 
 #include "KraftKontrol/hal/gpio_hal_abstract.h"
 
-#include "MCP23S17.h"
+#include "lib/MCP23S17/MCP23S17.h"
 
 #include "SPI.h"
 
