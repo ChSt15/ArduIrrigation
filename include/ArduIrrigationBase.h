@@ -1,6 +1,0 @@
-#ifndef ARDU_IRRIGATION_BASE_H
-#define ARDU_IRRIGATION_BASE_H
-
-
-
-#endif

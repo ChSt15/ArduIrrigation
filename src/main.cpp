@@ -15,9 +15,11 @@
 #include "ArduIrrigationBase/Timing/watering_dailytime.h"
 #include "ArduIrrigationBase/Timing/watering_cycle.h"
 
-#include "ArduIrrigationBase/comms/Physical/physical_link_topic.h"
+#include "ArduIrrigationBase/comms/Physical/physical_link_sx1280.h"
+
 #include "ArduIrrigationBase/comms/Datalink/datalink.h"
 #include "ArduIrrigationBase/comms/Network/network_port.h"
+#include "ArduIrrigationBase/comms/Transport/transport_simple.h"
 
 #include "definitions.h"
 
@@ -27,7 +29,7 @@
 #define MANUAL_WATERING_LENGTH 5*MINUTES
 
 
-SX1280Driver loraDriver(RFBUSY, TXEN, RXEN, DIO1, NRESET, NSS, 10);
+PhysicalLink_SX1280 loraDriver(RFBUSY, TXEN, RXEN, DIO1, NRESET, NSS);
 
 IOExpander_MCP23S17 ioExpander(SPI, GPIOExpanderCSPin, GPIOExpanderAddr);
 
@@ -327,15 +329,11 @@ public:
 
 
 
-Topic<DataFrame> topicLinkTest;
 
-PhysicalLink_Topic physicalLinkTest1(topicLinkTest);
-DataLink dataLink1(physicalLinkTest1);
+DataLink dataLink1(loraDriver);
 NetworkPort networkPort1;
+Transport_Simple tranSimple1(networkPort1, 555, 1);
 
-PhysicalLink_Topic physicalLinkTest2(topicLinkTest);
-DataLink dataLink2(physicalLinkTest2);
-NetworkPort networkPort2;
 
 
 class LinkTestSend: public Task_Threading {
@@ -343,82 +341,23 @@ public:
 
     LinkTestSend(): Task_Threading("Link Test Send", eTaskPriority_t::eTaskPriority_Realtime, 1*SECONDS) {
         networkPort1.useDatalink(dataLink1);
-        networkPort1.setAddress(1);
+        networkPort1.setAddress(2);
     }
 
     void thread() override {
 
-        uint8_t array[5];
-        NetworkPacket packet;
-        packet.destinationAddress = 3;
+        TimeDate time = SystemTime::getCurrentDateTime();
 
-        array[0] = 1;
-        array[1] = 2;
-        array[2] = 3;
-        array[3] = 6;
-        array[4] = 60;
-        packet.dataFrame = DataFrame(array, 5);
-        networkPort1.getNetworkPortTopic().publish(packet);
+        String test = String() + "Time: " + time.hour() + ":" + time.minute() + ":" + time.second() + ". Bat: " + vBatMonitor.getBatteryVoltage() + "V.";
 
-        array[0] = 1;
-        array[1] = 8;
-        array[2] = 4;
-        array[3] = 6;
-        array[4] = 60;
-        packet.dataFrame = DataFrame(array, 5);
-        networkPort1.getNetworkPortTopic().publish(packet);
-
-        array[0] = 1;
-        array[1] = 9;
-        array[2] = 1;
-        array[3] = 6;
-        array[4] = 60;
-        packet.dataFrame = DataFrame(array, 5);
-        networkPort1.getNetworkPortTopic().publish(packet);
+        tranSimple1.sendData((uint8_t*)test.c_str(), strlen(test.c_str()) + 1);
 
         Serial.println("Sending time!");
 
     }
 
 
-} linkTestSend;
-
-class LinkTestReceive: public Task_Threading {
-public:
-
-    LinkTestReceive(): Task_Threading("Link Test Receive", eTaskPriority_t::eTaskPriority_Realtime, 100*MILLISECONDS) {
-        networkPort2.useDatalink(dataLink2);
-        networkPort2.setAddress(2);
-    }
-
-    Buffer_Subscriber<NetworkPacket, 10> subr_;
-
-    void init() override {
-
-        subr_.subscribe(networkPort2.getNetworkPortTopic());
-
-    }
-
-    void thread() override {
-
-        while (subr_.available()) {
-
-            DataFrame frame;
-            NetworkPacket packet;
-            subr_.takeBack(packet);
-            frame = packet.dataFrame;
-
-            uint8_t array[5];
-            frame.copyContentsToArray(array, 5);
-
-            Serial.println(String() + "Received size: " + frame.getDataLength() + ". With Data: " + String(array[0]) + "," + String(array[1]) + "," + String(array[2]) + "," + String(array[3]) + "," + String(array[4]) + ". at time " + (double)NOW()/SECONDS);
-
-        }
-
-    }
-
-
-} linkTestReceive;
+};// linkTestSend;
 
 
 void sleepForTime(int64_t sleepTime_ns) {
@@ -431,6 +370,8 @@ void sleepForTime(int64_t sleepTime_ns) {
 
 
 void setup() {
+
+    delay(1000);
 
     setCpuFrequencyMhz(CPU_SPEED);
 
@@ -452,9 +393,9 @@ void setup() {
 
     Task_Threading::schedulerInitTasks();
 
-    loraDriver.setLoRaParams(2445000000UL, LORA_SF12, LORA_BW_0200, LORA_CR_4_8, false);
-    loraDriver.stopReceiving();
-    //loraDriver.startReceiving();
+    loraDriver.setLoRaParams(10, 2445000000UL, LORA_SF12, LORA_BW_0400, LORA_CR_4_8, false);
+    //loraDriver.stopReceiving();
+    loraDriver.startReceiving();
 
     Valve_Abstract::forceAllValvesShut(true);
 
