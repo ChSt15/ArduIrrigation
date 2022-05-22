@@ -1,0 +1,6 @@
+[submodule "lib/ArduIrrigationBase"]
+	path = lib/ArduIrrigationBase
+	url = https://github.com/ChSt15/ArduIrrigation.git
+[submodule "lib/EasyVTOL-Framework"]
+	path = lib/EasyVTOL-Framework
+	url = https://github.com/ChSt15/EasyVTOL-Framework.git

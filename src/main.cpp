@@ -38,7 +38,7 @@ Valve_Impulse valve3(ioExpander.getGPIOPinRef(Valve3BPin), ioExpander.getGPIOPin
 
 //WateringEvent event1(valve, 23, 27, 10*SECONDS);
 
-Watering_Cycle cycle1(valve1, 2*HOURS, 45*SECONDS, 4*HOURS, 20*HOURS);
+Watering_Cycle cycle1(valve1, 2*HOURS, 60*SECONDS, 4*HOURS, 20*HOURS);
 
 /*Watering_Cycle cycle11(valve1, 1*HOURS, 3*MINUTES, 12*HOURS, 23*HOURS);
 Watering_Cycle cycle12(valve1, 1*HOURS, 3*MINUTES, 1*HOURS, 8*HOURS);
